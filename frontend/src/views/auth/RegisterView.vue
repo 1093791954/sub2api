@@ -28,26 +28,26 @@
 
       <!-- Registration Form -->
       <form v-else @submit.prevent="handleRegister" class="space-y-5">
-        <!-- Email Input -->
+        <!-- Local account identifier -->
         <div>
           <label for="email" class="input-label">
-            {{ t('auth.emailLabel') }}
+            {{ accountLoginEnabled ? t('auth.accountLabel') : t('auth.emailLabel') }}
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon :name="accountLoginEnabled ? 'user' : 'mail'" size="md" class="text-gray-400 dark:text-dark-500" />
             </div>
             <input
               id="email"
               v-model="formData.email"
-              type="email"
+              :type="accountLoginEnabled ? 'text' : 'email'"
               required
               autofocus
-              autocomplete="email"
+              :autocomplete="accountLoginEnabled ? 'username' : 'email'"
               :disabled="registrationActionDisabled"
               class="input pl-11"
               :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.emailPlaceholder')"
+              :placeholder="accountLoginEnabled ? t('auth.accountPlaceholder') : t('auth.emailPlaceholder')"
             />
           </div>
         </div>
@@ -380,6 +380,7 @@ const showPassword = ref<boolean>(false)
 
 // Public settings
 const registrationEnabled = ref<boolean>(true)
+const accountLoginEnabled = ref<boolean>(false)
 const emailVerifyEnabled = ref<boolean>(false)
 const promoCodeEnabled = ref<boolean>(true)
 const invitationCodeEnabled = ref<boolean>(false)
@@ -497,6 +498,7 @@ onMounted(async () => {
   try {
     const settings = await getPublicSettings()
     registrationEnabled.value = settings.registration_enabled
+    accountLoginEnabled.value = settings.account_login_enabled === true
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
     invitationCodeEnabled.value = settings.invitation_code_enabled
@@ -863,12 +865,16 @@ function validateForm(): boolean {
 
   // Email validation
   if (!formData.email.trim()) {
-    errors.email = t('auth.emailRequired')
+    errors.email = accountLoginEnabled.value ? t('auth.accountRequired') : t('auth.emailRequired')
     isValid = false
-  } else if (!validateEmail(formData.email)) {
+  } else if (accountLoginEnabled.value && !/^[a-zA-Z0-9_.-]{3,64}$/.test(formData.email.trim())) {
+    errors.email = t('auth.invalidAccount')
+    isValid = false
+  } else if (!accountLoginEnabled.value && !validateEmail(formData.email)) {
     errors.email = t('auth.invalidEmail')
     isValid = false
   } else if (
+    !accountLoginEnabled.value &&
     !isRegistrationEmailSuffixAllowed(formData.email, registrationEmailSuffixWhitelist.value)
   ) {
     errors.email = buildEmailSuffixNotAllowedMessage()

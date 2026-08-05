@@ -55,6 +55,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	// 初始化默认设置
 	defaults := map[string]string{
 		SettingKeyRegistrationEnabled:                       "true",
+		SettingKeyAccountLoginEnabled:                       "false",
 		SettingKeyEmailVerifyEnabled:                        "false",
 		SettingKeyRegistrationEmailSuffixWhitelist:          "[]",
 		SettingKeyPromoCodeEnabled:                          "true", // 默认启用优惠码功能
@@ -272,7 +273,8 @@ func parseForwardedClientIPHeadersSetting(value string) ([]string, error) {
 
 // parseSettings 解析设置到结构体
 func (s *SettingService) parseSettings(settings map[string]string) *SystemSettings {
-	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
+	accountLoginEnabled := settings[SettingKeyAccountLoginEnabled] == "true"
+	emailVerifyEnabled := !accountLoginEnabled && settings[SettingKeyEmailVerifyEnabled] == "true"
 	loginAgreementDocuments := parseLoginAgreementDocuments(settings[SettingKeyLoginAgreementDocuments])
 	loginAgreementUpdatedAt := strings.TrimSpace(settings[SettingKeyLoginAgreementUpdatedAt])
 	if loginAgreementUpdatedAt == "" {
@@ -300,6 +302,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	result := &SystemSettings{
 		RegistrationEnabled:                    settings[SettingKeyRegistrationEnabled] == "true",
+		AccountLoginEnabled:                    accountLoginEnabled,
 		EmailVerifyEnabled:                     emailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:       ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
 		PromoCodeEnabled:                       settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用

@@ -127,6 +127,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 
 	payload := dto.SystemSettings{
 		RegistrationEnabled:                                    settings.RegistrationEnabled,
+		AccountLoginEnabled:                                    settings.AccountLoginEnabled,
 		EmailVerifyEnabled:                                     settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:                       settings.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                                       settings.PromoCodeEnabled,

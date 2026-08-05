@@ -13,6 +13,7 @@ func firstNonEmpty(values ...string) string {
 
 type SystemSettings struct {
 	RegistrationEnabled              bool
+	AccountLoginEnabled              bool
 	EmailVerifyEnabled               bool
 	RegistrationEmailSuffixWhitelist []string
 	PromoCodeEnabled                 bool
@@ -295,6 +296,7 @@ type DefaultSubscriptionSetting struct {
 
 type PublicSettings struct {
 	RegistrationEnabled              bool
+	AccountLoginEnabled              bool
 	EmailVerifyEnabled               bool
 	ForceEmailOnThirdPartySignup     bool
 	RegistrationEmailSuffixWhitelist []string

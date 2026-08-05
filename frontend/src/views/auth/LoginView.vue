@@ -12,26 +12,26 @@
       </div>
       <!-- Login Form -->
       <form @submit.prevent="handleLogin" class="space-y-5">
-        <!-- Email Input -->
+        <!-- Local account identifier -->
         <div>
           <label for="email" class="input-label">
-            {{ t('auth.emailLabel') }}
+            {{ accountLoginEnabled ? t('auth.accountLabel') : t('auth.emailLabel') }}
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon :name="accountLoginEnabled ? 'user' : 'mail'" size="md" class="text-gray-400 dark:text-dark-500" />
             </div>
             <input
               id="email"
               v-model="formData.email"
-              type="email"
+              :type="accountLoginEnabled ? 'text' : 'email'"
               required
               autofocus
-              autocomplete="email"
+              :autocomplete="accountLoginEnabled ? 'username' : 'email'"
               :disabled="authActionDisabled"
               class="input pl-11"
               :class="{ 'input-error': errors.email }"
-              :placeholder="t('auth.emailPlaceholder')"
+              :placeholder="accountLoginEnabled ? t('auth.accountPlaceholder') : t('auth.emailPlaceholder')"
             />
           </div>
         </div>
@@ -308,6 +308,8 @@ const formData = reactive({
   password: ''
 })
 
+const accountLoginEnabled = ref<boolean>(false)
+
 const errors = reactive({
   email: '',
   password: '',
@@ -360,6 +362,7 @@ onMounted(async () => {
 
   try {
     const settings = await getPublicSettings()
+    accountLoginEnabled.value = settings.account_login_enabled === true
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     tencentCaptchaEnabled.value = settings.tencent_captcha_enabled === true
@@ -503,11 +506,11 @@ function validateForm(): boolean {
     return false
   }
 
-  // Email validation
+  // Local identifier validation. Existing email users remain accepted in account mode.
   if (!formData.email.trim()) {
-    errors.email = t('auth.emailRequired')
+    errors.email = accountLoginEnabled.value ? t('auth.accountRequired') : t('auth.emailRequired')
     isValid = false
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+  } else if (!accountLoginEnabled.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
     errors.email = t('auth.invalidEmail')
     isValid = false
   }

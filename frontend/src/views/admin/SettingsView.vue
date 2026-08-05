@@ -1402,6 +1402,18 @@
                 <Toggle v-model="form.registration_enabled" />
               </div>
 
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t("admin.settings.registration.accountLogin") }}
+                  </h4>
+                  <p class="text-sm text-gray-500 dark:text-dark-400">
+                    {{ t("admin.settings.registration.accountLoginHint") }}
+                  </p>
+                </div>
+                <Toggle v-model="form.account_login_enabled" />
+              </div>
+
               <!-- Email Verification -->
               <div
                 class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
@@ -1414,11 +1426,11 @@
                     {{ t("admin.settings.registration.emailVerificationHint") }}
                   </p>
                 </div>
-                <Toggle v-model="form.email_verify_enabled" />
+                <Toggle v-model="form.email_verify_enabled" :disabled="form.account_login_enabled" />
               </div>
 
               <!-- Email Suffix Whitelist -->
-              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+              <div v-if="!form.account_login_enabled" class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <label class="font-medium text-gray-900 dark:text-white">{{
                   t("admin.settings.registration.emailSuffixWhitelist")
                 }}</label>
@@ -1517,7 +1529,7 @@
               </div>
               <!-- Password Reset - Only show when email verification is enabled -->
               <div
-                v-if="form.email_verify_enabled"
+                v-if="form.email_verify_enabled && !form.account_login_enabled"
                 class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
               >
                 <div>
@@ -1532,7 +1544,7 @@
               </div>
               <!-- Frontend URL - Only show when password reset is enabled -->
               <div
-                v-if="form.email_verify_enabled && form.password_reset_enabled"
+                v-if="!form.account_login_enabled && form.email_verify_enabled && form.password_reset_enabled"
                 class="border-t border-gray-100 pt-4 dark:border-dark-700"
               >
                 <label
@@ -7773,7 +7785,7 @@
 
         <div v-show="activeTab === 'email'" class="space-y-6">
           <!-- Email disabled hint - show when email_verify_enabled is off -->
-          <div v-if="!form.email_verify_enabled" class="card">
+          <div v-if="form.account_login_enabled || !form.email_verify_enabled" class="card">
             <div class="p-6">
               <div class="flex items-start gap-3">
                 <Icon
@@ -7794,7 +7806,7 @@
           </div>
 
           <!-- SMTP Settings - Only show when email verification is enabled -->
-          <div v-if="form.email_verify_enabled" class="card">
+          <div v-if="!form.account_login_enabled && form.email_verify_enabled" class="card">
             <div
               class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
@@ -7957,7 +7969,7 @@
           </div>
 
           <!-- Send Test Email - Only show when email verification is enabled -->
-          <div v-if="form.email_verify_enabled" class="card">
+          <div v-if="!form.account_login_enabled && form.email_verify_enabled" class="card">
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
@@ -9025,6 +9037,7 @@ type SettingsForm = Omit<
 
 const form = reactive<SettingsForm>({
   registration_enabled: true,
+  account_login_enabled: false,
   email_verify_enabled: false,
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
@@ -10576,6 +10589,7 @@ async function saveSettings() {
 
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
+      account_login_enabled: form.account_login_enabled,
       email_verify_enabled: form.email_verify_enabled,
       registration_email_suffix_whitelist:
         registrationEmailSuffixWhitelistTags.value.map((suffix) =>

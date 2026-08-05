@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"net/mail"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -25,6 +26,8 @@ import (
 
 var (
 	ErrInvalidCredentials      = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
+	ErrInvalidAccount          = infraerrors.BadRequest("INVALID_ACCOUNT", "account must be 3-64 characters using letters, numbers, underscores, hyphens, or dots")
+	ErrAccountExists           = infraerrors.Conflict("ACCOUNT_EXISTS", "account already exists")
 	ErrUserNotActive           = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
 	ErrEmailExists             = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
 	ErrEmailReserved           = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
@@ -48,6 +51,16 @@ var (
 
 // maxTokenLength 限制 token 大小，避免超长 header 触发解析时的异常内存分配。
 const maxTokenLength = 8192
+
+var localAccountPattern = regexp.MustCompile(`^[a-zA-Z0-9_.-]{3,64}$`)
+
+func normalizeLocalAccount(account string) (string, error) {
+	account = strings.ToLower(strings.TrimSpace(account))
+	if !localAccountPattern.MatchString(account) {
+		return "", ErrInvalidAccount
+	}
+	return account, nil
+}
 
 // refreshTokenPrefix is the prefix for refresh tokens to distinguish them from access tokens.
 const refreshTokenPrefix = "rt_"
@@ -156,12 +169,25 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		return "", nil, ErrRegDisabled
 	}
 
-	// 防止用户注册 LinuxDo OAuth 合成邮箱，避免第三方登录与本地账号发生碰撞。
-	if isReservedEmail(email) {
-		return "", nil, ErrEmailReserved
-	}
-	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
-		return "", nil, err
+	accountMode := s.settingService != nil && s.settingService.IsAccountLoginEnabled(ctx)
+	if accountMode {
+		var err error
+		email, err = normalizeLocalAccount(email)
+		if err != nil {
+			return "", nil, err
+		}
+	} else {
+		email = strings.ToLower(strings.TrimSpace(email))
+		if _, err := mail.ParseAddress(email); err != nil || len(email) > 255 {
+			return "", nil, infraerrors.BadRequest("INVALID_EMAIL", "invalid email")
+		}
+		// 防止用户注册 LinuxDo OAuth 合成邮箱，避免第三方登录与本地账号发生碰撞。
+		if isReservedEmail(email) {
+			return "", nil, ErrEmailReserved
+		}
+		if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
+			return "", nil, err
+		}
 	}
 
 	// 检查是否需要邀请码
@@ -202,12 +228,21 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 
 	// 检查邮箱是否已存在（含 +别名 / Gmail 点号变体归一化，防止单个收件箱批量派生注册）
-	existsEmail, err := s.existsByEmailOrAlias(ctx, email)
+	var existsEmail bool
+	var err error
+	if accountMode {
+		existsEmail, err = s.userRepo.ExistsByEmail(ctx, email)
+	} else {
+		existsEmail, err = s.existsByEmailOrAlias(ctx, email)
+	}
 	if err != nil {
 		logger.LegacyPrintf("service.auth", "[Auth] Database error checking email exists: %v", err)
 		return "", nil, ErrServiceUnavailable
 	}
 	if existsEmail {
+		if accountMode {
+			return "", nil, ErrAccountExists
+		}
 		return "", nil, ErrEmailExists
 	}
 
@@ -227,7 +262,13 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 
 	// 创建用户
 	user := &User{
-		Email:        email,
+		Email: email,
+		Username: func() string {
+			if accountMode {
+				return email
+			}
+			return ""
+		}(),
 		PasswordHash: hashedPassword,
 		Role:         RoleUser,
 		Balance:      grantPlan.Balance,
@@ -236,9 +277,16 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		Status:       StatusActive,
 	}
 
-	if err := s.userRepo.CreateWithEmailAliasGuard(ctx, user); err != nil {
+	createUser := s.userRepo.CreateWithEmailAliasGuard
+	if accountMode {
+		createUser = s.userRepo.Create
+	}
+	if err := createUser(ctx, user); err != nil {
 		// 优先检查邮箱冲突错误（竞态条件下可能发生）
 		if errors.Is(err, ErrEmailExists) {
+			if accountMode {
+				return "", nil, ErrAccountExists
+			}
 			return "", nil, ErrEmailExists
 		}
 		logger.LegacyPrintf("service.auth", "[Auth] Database error creating user: %v", err)
@@ -499,6 +547,10 @@ func (s *AuthService) IsEmailVerifyEnabled(ctx context.Context) bool {
 
 // Login 用户登录，返回JWT token
 func (s *AuthService) Login(ctx context.Context, email, password string) (string, *User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email == "" || len(email) > 255 {
+		return "", nil, ErrInvalidCredentials
+	}
 	// 查找用户
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {

@@ -23,8 +23,21 @@ func (s *SettingService) IsRegistrationEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+// IsAccountLoginEnabled reports whether local password auth uses account identifiers.
+// Missing settings preserve the legacy email-password behavior.
+func (s *SettingService) IsAccountLoginEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyAccountLoginEnabled)
+	if err != nil {
+		return false
+	}
+	return value == "true"
+}
+
 // IsEmailVerifyEnabled 检查是否开启邮件验证
 func (s *SettingService) IsEmailVerifyEnabled(ctx context.Context) bool {
+	if s.IsAccountLoginEnabled(ctx) {
+		return false
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyEmailVerifyEnabled)
 	if err != nil {
 		return false

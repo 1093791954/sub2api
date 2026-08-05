@@ -114,6 +114,8 @@ export default {
         title: '注册设置',
         description: '控制用户注册和验证',
         enableRegistration: '开放注册',
+		accountLogin: '账号注册登录',
+		accountLoginHint: '开启后，本地密码注册登录使用唯一账号，不再使用邮箱验证和忘记密码。旧用户仍可用原邮箱值作为已有账号标识登录。',
         enableRegistrationHint: '允许新用户注册',
         emailVerification: '邮箱验证',
         emailVerificationHint: '新用户注册时需要验证邮箱',

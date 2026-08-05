@@ -157,6 +157,7 @@ func (s *SettingService) GetFrontendURL(ctx context.Context) string {
 func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings, error) {
 	keys := []string{
 		SettingKeyRegistrationEnabled,
+		SettingKeyAccountLoginEnabled,
 		SettingKeyEmailVerifyEnabled,
 		SettingKeyForceEmailOnThirdPartySignup,
 		SettingKeyRegistrationEmailSuffixWhitelist,
@@ -266,7 +267,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	weChatEnabled, weChatOpenEnabled, weChatMPEnabled, weChatMobileEnabled := s.weChatOAuthCapabilitiesFromSettings(settings)
 
 	// Password reset requires email verification to be enabled
-	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
+	accountLoginEnabled := settings[SettingKeyAccountLoginEnabled] == "true"
+	emailVerifyEnabled := !accountLoginEnabled && settings[SettingKeyEmailVerifyEnabled] == "true"
 	passwordResetEnabled := emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true"
 	registrationEmailSuffixWhitelist := ParseRegistrationEmailSuffixWhitelist(
 		settings[SettingKeyRegistrationEmailSuffixWhitelist],
@@ -288,6 +290,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 
 	return &PublicSettings{
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
+		AccountLoginEnabled:              accountLoginEnabled,
 		EmailVerifyEnabled:               emailVerifyEnabled,
 		ForceEmailOnThirdPartySignup:     settings[SettingKeyForceEmailOnThirdPartySignup] == "true",
 		RegistrationEmailSuffixWhitelist: registrationEmailSuffixWhitelist,
@@ -480,6 +483,7 @@ func (s *SettingService) IsUserErrorViewAllowed(ctx context.Context) bool {
 // drift automatically (see setting_service_injection_test.go).
 type PublicSettingsInjectionPayload struct {
 	RegistrationEnabled              bool                     `json:"registration_enabled"`
+	AccountLoginEnabled              bool                     `json:"account_login_enabled"`
 	EmailVerifyEnabled               bool                     `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist []string                 `json:"registration_email_suffix_whitelist"`
 	PromoCodeEnabled                 bool                     `json:"promo_code_enabled"`
@@ -555,6 +559,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 
 	return &PublicSettingsInjectionPayload{
 		RegistrationEnabled:              settings.RegistrationEnabled,
+		AccountLoginEnabled:              settings.AccountLoginEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings.PromoCodeEnabled,

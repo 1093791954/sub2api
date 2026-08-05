@@ -129,6 +129,7 @@ const DingTalkConnectSyntheticEmailDomain = "@dingtalk-connect.invalid"
 const (
 	// 注册设置
 	SettingKeyRegistrationEnabled              = "registration_enabled"                // 是否开放注册
+	SettingKeyAccountLoginEnabled              = "account_login_enabled"               // 是否使用账号密码注册登录（复用 users.email 作为唯一标识）
 	SettingKeyEmailVerifyEnabled               = "email_verify_enabled"                // 是否开启邮件验证
 	SettingKeyRegistrationEmailSuffixWhitelist = "registration_email_suffix_whitelist" // 注册邮箱后缀白名单（JSON 数组）
 	SettingKeyPromoCodeEnabled                 = "promo_code_enabled"                  // 是否启用优惠码功能

@@ -369,6 +369,45 @@ func TestAuthService_Register_EmailExists(t *testing.T) {
 	require.ErrorIs(t, err, ErrEmailExists)
 }
 
+func TestAuthService_Register_AccountModeNormalizesAndCreatesAccount(t *testing.T) {
+	repo := &userRepoStub{nextID: 88}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+		SettingKeyAccountLoginEnabled: "true",
+		SettingKeyEmailVerifyEnabled:  "true",
+	}, nil, nil)
+
+	_, user, err := service.Register(context.Background(), "  Demo.User_01  ", "password")
+	require.NoError(t, err)
+	require.Equal(t, "demo.user_01", user.Email)
+	require.Equal(t, "demo.user_01", user.Username)
+	require.Zero(t, repo.guardedCreates, "account registration must not run email alias dedup")
+	require.Len(t, repo.created, 1)
+}
+
+func TestAuthService_Register_AccountModeRejectsInvalidAccount(t *testing.T) {
+	repo := &userRepoStub{}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+		SettingKeyAccountLoginEnabled: "true",
+	}, nil, nil)
+
+	_, _, err := service.Register(context.Background(), "user@example.com", "password")
+	require.ErrorIs(t, err, ErrInvalidAccount)
+	require.Empty(t, repo.created)
+}
+
+func TestAuthService_Register_AccountModeReportsDuplicateAccount(t *testing.T) {
+	repo := &userRepoStub{exists: true}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+		SettingKeyAccountLoginEnabled: "true",
+	}, nil, nil)
+
+	_, _, err := service.Register(context.Background(), "existing-user", "password")
+	require.ErrorIs(t, err, ErrAccountExists)
+}
+
 func TestAuthService_Register_AliasDuplicateRejected(t *testing.T) {
 	repo := &userRepoStub{aliasExists: true}
 	service := newAuthService(repo, map[string]string{

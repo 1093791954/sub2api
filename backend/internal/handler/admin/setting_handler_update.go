@@ -24,6 +24,7 @@ import (
 type UpdateSettingsRequest struct {
 	// 注册设置
 	RegistrationEnabled              bool                         `json:"registration_enabled"`
+	AccountLoginEnabled              bool                         `json:"account_login_enabled"`
 	EmailVerifyEnabled               bool                         `json:"email_verify_enabled"`
 	RegistrationEmailSuffixWhitelist []string                     `json:"registration_email_suffix_whitelist"`
 	PromoCodeEnabled                 bool                         `json:"promo_code_enabled"`
@@ -1400,6 +1401,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		DefaultPlatformQuotas: req.DefaultPlatformQuotas,
 
 		RegistrationEnabled:              req.RegistrationEnabled,
+		AccountLoginEnabled:              req.AccountLoginEnabled,
 		EmailVerifyEnabled:               req.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist: req.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 req.PromoCodeEnabled,
@@ -1973,6 +1975,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 
 	payload := dto.SystemSettings{
 		RegistrationEnabled:                                    updatedSettings.RegistrationEnabled,
+		AccountLoginEnabled:                                    updatedSettings.AccountLoginEnabled,
 		EmailVerifyEnabled:                                     updatedSettings.EmailVerifyEnabled,
 		RegistrationEmailSuffixWhitelist:                       updatedSettings.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                                       updatedSettings.PromoCodeEnabled,

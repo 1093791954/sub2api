@@ -114,6 +114,8 @@ export default {
         title: 'Registration Settings',
         description: 'Control user registration and verification',
         enableRegistration: 'Enable Registration',
+		accountLogin: 'Account password login',
+		accountLoginHint: 'Use a unique account identifier for local signup and login. Email verification and password reset are disabled; existing users can still enter their stored email value.',
         enableRegistrationHint: 'Allow new users to register',
         emailVerification: 'Email Verification',
         emailVerificationHint: 'Require email verification for new registrations',
