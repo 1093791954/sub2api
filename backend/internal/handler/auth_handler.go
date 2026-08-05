@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -584,6 +585,47 @@ func (h *AuthHandler) ValidateInvitationCode(c *gin.Context) {
 	response.Success(c, ValidateInvitationCodeResponse{
 		Valid: true,
 	})
+}
+
+// ValidateAffiliateCodeResponse is intentionally minimal so public callers
+// cannot enumerate inviter identity details.
+type ValidateAffiliateCodeResponse struct {
+	Valid     bool   `json:"valid"`
+	ErrorCode string `json:"error_code,omitempty"`
+}
+
+// ValidateAffiliateCode validates an affiliate referral code before signup.
+// POST /api/v1/auth/validate-affiliate-code
+func (h *AuthHandler) ValidateAffiliateCode(c *gin.Context) {
+	var req ValidateInvitationCodeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if h.authService == nil {
+		response.Success(c, ValidateAffiliateCodeResponse{
+			Valid:     false,
+			ErrorCode: "SERVICE_UNAVAILABLE",
+		})
+		return
+	}
+
+	if err := h.authService.ValidateAffiliateCode(c.Request.Context(), req.Code); err != nil {
+		errorCode := "AFFILIATE_CODE_INVALID"
+		if errors.Is(err, service.ErrAffiliateDisabled) {
+			errorCode = "AFFILIATE_DISABLED"
+		} else if !errors.Is(err, service.ErrAffiliateCodeInvalid) {
+			errorCode = "SERVICE_UNAVAILABLE"
+		}
+		response.Success(c, ValidateAffiliateCodeResponse{
+			Valid:     false,
+			ErrorCode: errorCode,
+		})
+		return
+	}
+
+	response.Success(c, ValidateAffiliateCodeResponse{Valid: true})
 }
 
 // ForgotPasswordRequest 忘记密码请求

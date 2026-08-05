@@ -162,6 +162,15 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (str
 	return s.RegisterWithVerification(ctx, email, password, "", "", "", "")
 }
 
+// ValidateAffiliateCode validates a registration referral code without
+// exposing affiliate profile details.
+func (s *AuthService) ValidateAffiliateCode(ctx context.Context, code string) error {
+	if s == nil || s.affiliateService == nil {
+		return infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+	return s.affiliateService.ValidateAffiliateCode(ctx, code)
+}
+
 // RegisterWithVerification 用户注册（支持邮件验证、优惠码、邀请码和邀请返利码），返回token和用户。
 func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode, affiliateCode string) (string, *User, error) {
 	// 检查是否开放注册（默认关闭：settingService 未配置时不允许注册）

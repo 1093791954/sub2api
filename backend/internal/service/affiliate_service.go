@@ -13,6 +13,7 @@ import (
 
 var (
 	ErrAffiliateProfileNotFound = infraerrors.NotFound("AFFILIATE_PROFILE_NOT_FOUND", "affiliate profile not found")
+	ErrAffiliateDisabled        = infraerrors.BadRequest("AFFILIATE_DISABLED", "affiliate feature is disabled")
 	ErrAffiliateCodeInvalid     = infraerrors.BadRequest("AFFILIATE_CODE_INVALID", "invalid affiliate code")
 	ErrAffiliateCodeTaken       = infraerrors.Conflict("AFFILIATE_CODE_TAKEN", "affiliate code already in use")
 	ErrAffiliateAlreadyBound    = infraerrors.Conflict("AFFILIATE_ALREADY_BOUND", "affiliate inviter already bound")
@@ -266,6 +267,38 @@ func (s *AffiliateService) GetAffiliateDetail(ctx context.Context, userID int64)
 	}, nil
 }
 
+// ValidateAffiliateCode checks whether a public registration referral code can
+// currently resolve to an inviter without exposing inviter details.
+func (s *AffiliateService) ValidateAffiliateCode(ctx context.Context, rawCode string) error {
+	if !s.IsEnabled(ctx) {
+		return ErrAffiliateDisabled
+	}
+	_, err := s.resolveAffiliateCode(ctx, rawCode)
+	return err
+}
+
+func (s *AffiliateService) resolveAffiliateCode(ctx context.Context, rawCode string) (*AffiliateSummary, error) {
+	code := strings.ToUpper(strings.TrimSpace(rawCode))
+	if !isValidAffiliateCodeFormat(code) {
+		return nil, ErrAffiliateCodeInvalid
+	}
+	if s == nil || s.repo == nil {
+		return nil, infraerrors.ServiceUnavailable("SERVICE_UNAVAILABLE", "affiliate service unavailable")
+	}
+
+	summary, err := s.repo.GetAffiliateByCode(ctx, code)
+	if err != nil {
+		if errors.Is(err, ErrAffiliateProfileNotFound) {
+			return nil, ErrAffiliateCodeInvalid
+		}
+		return nil, err
+	}
+	if summary == nil || summary.UserID <= 0 {
+		return nil, ErrAffiliateCodeInvalid
+	}
+	return summary, nil
+}
+
 func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, rawCode string) error {
 	code := strings.ToUpper(strings.TrimSpace(rawCode))
 	if code == "" {
@@ -278,10 +311,6 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 	if !s.IsEnabled(ctx) {
 		return nil
 	}
-	if !isValidAffiliateCodeFormat(code) {
-		return ErrAffiliateCodeInvalid
-	}
-
 	selfSummary, err := s.repo.EnsureUserAffiliate(ctx, userID)
 	if err != nil {
 		return err
@@ -290,14 +319,11 @@ func (s *AffiliateService) BindInviterByCode(ctx context.Context, userID int64, 
 		return nil
 	}
 
-	inviterSummary, err := s.repo.GetAffiliateByCode(ctx, code)
+	inviterSummary, err := s.resolveAffiliateCode(ctx, code)
 	if err != nil {
-		if errors.Is(err, ErrAffiliateProfileNotFound) {
-			return ErrAffiliateCodeInvalid
-		}
 		return err
 	}
-	if inviterSummary == nil || inviterSummary.UserID <= 0 || inviterSummary.UserID == userID {
+	if inviterSummary.UserID == userID {
 		return ErrAffiliateCodeInvalid
 	}
 
