@@ -807,3 +807,80 @@ func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
 		Message: "All sessions have been revoked. Please log in again.",
 	})
 }
+
+// ==================== Access Key Auth Handlers ====================
+
+// KeyRegisterRequest is the payload for key-based registration.
+type KeyRegisterRequest struct {
+	AccessKey   string `json:"access_key" binding:"required"`
+	AdminSecret string `json:"admin_secret" binding:"required"`
+}
+
+// KeyLoginRequest is the payload for key-based login.
+type KeyLoginRequest struct {
+	AccessKey string `json:"access_key" binding:"required"`
+}
+
+// KeyRegister handles access-key based user registration.
+// POST /api/v1/auth/key-register
+func (h *AuthHandler) KeyRegister(c *gin.Context) {
+	var req KeyRegisterRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	_, user, err := h.authService.KeyRegister(c.Request.Context(), req.AccessKey, req.AdminSecret)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	h.respondWithTokenPair(c, user)
+}
+
+// KeyLogin handles access-key based login.
+// POST /api/v1/auth/key-login
+func (h *AuthHandler) KeyLogin(c *gin.Context) {
+	var req KeyLoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if err := h.ensureBackendModeAllowsNewUserLogin(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	_, user, err := h.authService.KeyLogin(c.Request.Context(), req.AccessKey)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	if err := ensureLoginUserActive(user); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	// Mirror the TOTP gate from the regular Login handler: if the user has 2FA
+	// enabled, key-login must go through the same challenge flow rather than
+	// bypassing it entirely.
+	if h.totpService != nil && h.settingSvc.IsTotpEnabled(c.Request.Context()) && user.TotpEnabled {
+		tempToken, err := h.totpService.CreateLoginSession(c.Request.Context(), user.ID, user.Email)
+		if err != nil {
+			response.InternalError(c, "Failed to create 2FA session")
+			return
+		}
+		response.Success(c, TotpLoginResponse{
+			Requires2FA:     true,
+			TempToken:       tempToken,
+			UserEmailMasked: service.MaskEmail(user.Email),
+		})
+		return
+	}
+
+	h.authService.RecordSuccessfulLogin(c.Request.Context(), user.ID)
+	h.respondWithTokenPair(c, user)
+}

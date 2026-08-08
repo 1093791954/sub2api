@@ -72,6 +72,16 @@ func (s *SettingService) IsInvitationCodeEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+// GetKeyRegisterSecret returns the admin secret required for key-based registration.
+// An empty return value means key-based registration is not configured and is disabled.
+func (s *SettingService) GetKeyRegisterSecret(ctx context.Context) string {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyKeyRegisterSecret)
+	if err != nil {
+		return ""
+	}
+	return value
+}
+
 // GetCustomMenuItemsRaw returns the raw JSON string of custom_menu_items setting.
 func (s *SettingService) GetCustomMenuItemsRaw(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyCustomMenuItems)

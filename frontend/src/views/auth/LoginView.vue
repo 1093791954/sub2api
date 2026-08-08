@@ -11,7 +11,32 @@
         </p>
       </div>
       <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
+      <form @submit.prevent="loginMode === 'key' ? handleKeyLogin() : handleLogin()" class="space-y-5">
+        <!-- Login mode switcher -->
+        <div class="flex rounded-lg border border-gray-200 dark:border-dark-700 p-1 gap-1">
+          <button
+            type="button"
+            @click="loginMode = 'account'"
+            class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors"
+            :class="loginMode === 'account'
+              ? 'bg-white dark:bg-dark-800 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200'"
+          >
+            {{ t('auth.accountLogin') }}
+          </button>
+          <button
+            type="button"
+            @click="loginMode = 'key'"
+            class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors"
+            :class="loginMode === 'key'
+              ? 'bg-white dark:bg-dark-800 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200'"
+          >
+            {{ t('auth.keyLogin') }}
+          </button>
+        </div>
+
+        <template v-if="loginMode === 'account'">
         <!-- Local account identifier -->
         <div>
           <label for="email" class="input-label">
@@ -96,10 +121,32 @@
           />
         </div>
 
+        </template>
+        <template v-else>
+          <div>
+            <label for="access-key" class="input-label">{{ t('auth.accessKey') }}</label>
+            <div class="relative">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                <Icon name="key" size="md" class="text-gray-400 dark:text-dark-500" />
+              </div>
+              <input
+                id="access-key"
+                v-model="keyLoginForm.accessKey"
+                type="text"
+                autocomplete="off"
+                :disabled="isLoading"
+                class="input pl-11"
+                :placeholder="t('auth.accessKeyPlaceholder')"
+              />
+            </div>
+            <p v-if="keyLoginError" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ keyLoginError }}</p>
+          </div>
+        </template>
+
         <!-- Submit Button -->
         <button
           type="submit"
-          :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
+          :disabled="loginMode === 'key' ? isLoading : (authActionDisabled || (turnstileEnabled && !turnstileToken))"
           class="btn btn-primary w-full"
         >
           <svg
@@ -127,7 +174,7 @@
         </button>
 
         <LoginAgreementPrompt
-          v-if="loginAgreementEnabled"
+          v-if="loginMode === 'account' && loginAgreementEnabled"
           :accepted="agreementAccepted"
           :documents="loginAgreementDocuments"
           :mode="loginAgreementMode"
@@ -138,7 +185,7 @@
           @open="showAgreementModal = true"
         />
 
-        <div v-if="showPasskeyLogin || showOAuthLogin" class="space-y-3 pt-1">
+        <div v-if="loginMode === 'account' && (showPasskeyLogin || showOAuthLogin)" class="space-y-3 pt-1">
           <div class="flex items-center gap-3">
             <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
             <span class="text-xs text-gray-500 dark:text-dark-400">
@@ -328,6 +375,9 @@ const formData = reactive({
 })
 
 const accountLoginEnabled = ref<boolean>(false)
+const loginMode = ref<'account' | 'key'>('account')
+const keyLoginForm = reactive({ accessKey: '' })
+const keyLoginError = ref<string>('')
 
 const errors = reactive({
   email: '',
@@ -612,6 +662,32 @@ async function handleLogin(): Promise<void> {
     if (captchaEnabled.value) {
       resetCaptchaProof()
     }
+    isLoading.value = false
+  }
+}
+
+async function handleKeyLogin(): Promise<void> {
+  if (!keyLoginForm.accessKey.trim()) return
+  // Respect the same login-agreement gate as regular login.
+  if (agreementGateActive.value) {
+    appStore.showWarning(t('legal.loginAgreementPrompt.loginRequiredWarning'))
+    if (loginAgreementMode.value !== 'checkbox') {
+      showAgreementModal.value = true
+    }
+    return
+  }
+  isLoading.value = true
+  keyLoginError.value = ''
+  try {
+    await authStore.keyLogin(keyLoginForm.accessKey.trim())
+    clearAllAffiliateReferralCodes()
+    appStore.showSuccess(t('auth.loginSuccess'))
+    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    await router.push(redirectTo)
+  } catch (err: unknown) {
+    keyLoginError.value = extractI18nErrorMessage(err, t, 'auth.errors', t('auth.loginFailed'))
+    appStore.showError(keyLoginError.value)
+  } finally {
     isLoading.value = false
   }
 }

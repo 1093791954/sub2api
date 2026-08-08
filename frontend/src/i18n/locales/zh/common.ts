@@ -400,6 +400,13 @@ export default {
       state: '状态',
       fullUrl: '完整URL'
     },
+    accountLogin: '账号登录',
+    keyLogin: '密钥登录',
+    keyRegister: '密钥注册',
+    accessKey: '访问密钥',
+    accessKeyPlaceholder: '输入32-64位访问密钥',
+    adminSecret: '管理员注册码',
+    adminSecretPlaceholder: '输入管理员注册码',
     // 忘记密码
     forgotPassword: '忘记密码？',
     forgotPasswordTitle: '重置密码',

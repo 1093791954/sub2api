@@ -1527,6 +1527,51 @@
                 </div>
                 <Toggle v-model="form.invitation_code_enabled" />
               </div>
+              <!-- Key Register Secret -->
+              <div
+                class="border-t border-gray-100 pt-4 dark:border-dark-700"
+              >
+                <label
+                  class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  密钥注册码
+                </label>
+                <p class="mb-2 text-sm text-gray-500 dark:text-gray-400">
+                  设置后，用户可凭访问密钥+此注册码完成一键注册，无需邮箱密码
+                </p>
+                <div class="flex gap-2">
+                  <input
+                    v-model="form.key_register_secret"
+                    type="password"
+                    class="input flex-1"
+                    autocomplete="new-password"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    @keydown="keyRegisterSecretManuallyEdited = true"
+                    @paste="keyRegisterSecretManuallyEdited = true"
+                    :placeholder="
+                      form.key_register_secret_configured
+                        ? '已配置，输入新值可覆盖'
+                        : '输入注册码以启用此功能'
+                    "
+                  />
+                  <button
+                    v-if="form.key_register_secret_configured"
+                    type="button"
+                    class="btn btn-secondary shrink-0"
+                    @click="form.key_register_secret = ''; keyRegisterSecretManuallyEdited = true"
+                  >
+                    清除
+                  </button>
+                </div>
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{
+                    form.key_register_secret_configured
+                      ? "已配置密钥注册码"
+                      : "未配置密钥注册码"
+                  }}
+                </p>
+              </div>
               <!-- Password Reset - Only show when email verification is enabled -->
               <div
                 v-if="form.email_verify_enabled && !form.account_login_enabled"
@@ -8596,6 +8641,7 @@ const saving = ref(false);
 const testingSmtp = ref(false);
 const sendingTestEmail = ref(false);
 const smtpPasswordManuallyEdited = ref(false);
+const keyRegisterSecretManuallyEdited = ref(false);
 const testEmailAddress = ref("");
 const registrationEmailSuffixWhitelistTags = ref<string[]>([]);
 const registrationEmailSuffixWhitelistDraft = ref("");
@@ -9168,6 +9214,8 @@ type SettingsForm = Omit<
   openai_advanced_scheduler_weight_upstream_cost: string;
   openai_advanced_scheduler_weight_previous_response: string;
   openai_advanced_scheduler_weight_session_sticky: string;
+  key_register_secret: string;
+  key_register_secret_configured: boolean;
   // 系统全局平台限额 map；form 内始终归一化为全 4 平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
 };
@@ -9179,6 +9227,8 @@ const form = reactive<SettingsForm>({
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
   invitation_code_enabled: false,
+  key_register_secret: "",
+  key_register_secret_configured: false,
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
@@ -10448,6 +10498,8 @@ async function loadSettings() {
     registrationEmailSuffixWhitelistDraft.value = "";
     form.smtp_password = "";
     smtpPasswordManuallyEdited.value = false;
+    form.key_register_secret = "";
+    keyRegisterSecretManuallyEdited.value = false;
     form.turnstile_secret_key = "";
     form.tencent_captcha_app_secret_key = "";
     form.tencent_captcha_cloud_secret_id = "";
@@ -10817,6 +10869,9 @@ async function saveSettings() {
       smtp_port: form.smtp_port,
       smtp_username: form.smtp_username,
       smtp_password: form.smtp_password || undefined,
+      key_register_secret: keyRegisterSecretManuallyEdited.value
+        ? form.key_register_secret
+        : undefined,
       smtp_from_email: form.smtp_from_email,
       smtp_from_name: form.smtp_from_name,
       smtp_use_tls: form.smtp_use_tls,

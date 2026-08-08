@@ -92,6 +92,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if req.SMTPPassword != "" {
 		changed = append(changed, "smtp_password")
 	}
+	if req.KeyRegisterSecret != nil {
+		changed = append(changed, "key_register_secret")
+	}
 	if before.SMTPFrom != after.SMTPFrom {
 		changed = append(changed, "smtp_from_email")
 	}

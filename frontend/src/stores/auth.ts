@@ -350,6 +350,37 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * Key-based login
+   * @param accessKey - The user's access key
+   */
+  async function keyLogin(accessKey: string): Promise<User> {
+    try {
+      const response = await authAPI.keyLogin(accessKey)
+      setAuthFromResponse(response)
+      return user.value!
+    } catch (error) {
+      clearAuth({ preservePendingAuthSession: pendingAuthSession.value !== null })
+      throw error
+    }
+  }
+
+  /**
+   * Key-based registration
+   * @param accessKey - The desired access key
+   * @param adminSecret - Admin registration secret
+   */
+  async function keyRegister(accessKey: string, adminSecret: string): Promise<User> {
+    try {
+      const response = await authAPI.keyRegister(accessKey, adminSecret)
+      setAuthFromResponse(response)
+      return user.value!
+    } catch (error) {
+      clearAuth({ preservePendingAuthSession: pendingAuthSession.value !== null })
+      throw error
+    }
+  }
+
+  /**
    * 直接设置 token（用于 OAuth/SSO 回调），并加载当前用户信息。
    * 会自动读取 localStorage 中已设置的 refresh_token 和 token_expires_in
    * @param newToken - 后端签发的 JWT access token
@@ -506,6 +537,8 @@ export const useAuthStore = defineStore('auth', () => {
     loginWithPasskey,
     login2FA,
     register,
+    keyLogin,
+    keyRegister,
     setToken,
     logout,
     checkAuth,

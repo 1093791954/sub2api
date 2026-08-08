@@ -182,6 +182,18 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 - **Admin Dashboard** - Web interface for monitoring and management
 - **Composite Groups** - Admin routing layer that resolves requested models to concrete providers for multi-provider groups ([Operator Guide](docs/COMPOSITE_GROUPS.md))
 - **External System Integration** - Embed external systems (e.g. ticketing) via iframe to extend the admin dashboard
+- **Access Key Auth** - One-step registration and login using a single 32–64 character access key (no email/password required). Admin configures a registration secret to gate new key-based accounts.
+
+### Access Key Authentication
+
+Users can register and log in without email/password using a unique access key (32–64 alphanumeric characters):
+
+- **Register**: `POST /api/v1/auth/key-register` with `{ "access_key": "...", "admin_secret": "..." }` — the admin secret is configured in Admin → System Settings → Key Registration Secret.
+- **Login**: `POST /api/v1/auth/key-login` with `{ "access_key": "..." }`
+
+Admins enable this by setting a non-empty **Key Registration Secret** in the system settings panel.
+
+---
 
 ## Ecosystem
 

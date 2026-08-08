@@ -31,7 +31,8 @@ type UpdateSettingsRequest struct {
 	PasswordResetEnabled             bool                         `json:"password_reset_enabled"`
 	FrontendURL                      string                       `json:"frontend_url"`
 	InvitationCodeEnabled            bool                         `json:"invitation_code_enabled"`
-	TotpEnabled                      bool                         `json:"totp_enabled"`             // TOTP 双因素认证
+	KeyRegisterSecret                *string                      `json:"key_register_secret"` // 密钥注册验证码（nil=不修改，空字符串=禁用）
+	TotpEnabled                      bool                         `json:"totp_enabled"`        // TOTP 双因素认证
 	PasskeyEnabled                   *bool                        `json:"passkey_enabled"`          // Passkey 登录（省略=保持现值）
 	SessionBindingEnabled            *bool                        `json:"session_binding_enabled"`  // 会话 IP/UA 绑定（省略=保持现值）
 	StepUpEnabled                    *bool                        `json:"step_up_enabled"`          // 敏感操作 step-up 2FA（省略=保持现值）
@@ -460,6 +461,11 @@ func settingsAuditRequest(req UpdateSettingsRequest) UpdateSettingsRequest {
 	req.TencentCaptchaCloudSecretID = strings.TrimSpace(req.TencentCaptchaCloudSecretID)
 	req.TencentCaptchaCloudSecretKey = strings.TrimSpace(req.TencentCaptchaCloudSecretKey)
 	req.AliyunCaptchaAccessKeySecret = strings.TrimSpace(req.AliyunCaptchaAccessKeySecret)
+	// Redact key_register_secret so the plaintext value is never written to audit logs.
+	if req.KeyRegisterSecret != nil {
+		redacted := "[redacted]"
+		req.KeyRegisterSecret = &redacted
+	}
 	return req
 }
 
@@ -1479,6 +1485,12 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PasswordResetEnabled:             req.PasswordResetEnabled,
 		FrontendURL:                      req.FrontendURL,
 		InvitationCodeEnabled:            req.InvitationCodeEnabled,
+		KeyRegisterSecret: func() string {
+			if req.KeyRegisterSecret != nil {
+				return *req.KeyRegisterSecret
+			}
+			return previousSettings.KeyRegisterSecret
+		}(),
 		TotpEnabled:                      req.TotpEnabled,
 		PasskeyEnabled:                   passkeyEnabled,
 		SessionBindingEnabled:            sessionBindingEnabled,

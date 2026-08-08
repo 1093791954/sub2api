@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -1335,7 +1336,8 @@ func isReservedEmail(email string) bool {
 	return strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain) ||
 		strings.HasSuffix(normalized, WeChatConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, DingTalkConnectSyntheticEmailDomain)
+		strings.HasSuffix(normalized, DingTalkConnectSyntheticEmailDomain) ||
+		strings.HasSuffix(normalized, KeyLoginSyntheticEmailDomain)
 }
 
 // GenerateToken 生成JWT access token
@@ -1892,4 +1894,108 @@ func (s *AuthService) snapshotPlatformQuotaDefaults(ctx context.Context, userID 
 		return nil // fail-open：返回 nil，让调用方继续
 	}
 	return nil
+}
+
+// ==================== Access Key Auth ====================
+
+// accessKeyPattern validates access keys: alphanumeric, underscores, hyphens, 32–64 chars.
+var accessKeyPattern = regexp.MustCompile(`^[a-zA-Z0-9_\-]{32,64}$`)
+
+// deriveKeyCredentials maps an access key to a synthetic (email, password) pair using
+// SHA-256 of the full key, so every character of the key contributes to both values.
+// Splitting the raw key naively (e.g. first-N / last-N bytes) would make the middle
+// characters irrelevant, allowing two different keys to share the same credentials.
+//
+//	email    = hex(sha256(key))[:32] + "@key.local"   (32 lowercase hex chars, always unique up to SHA-256 collision)
+//	password = hex(sha256(key))[32:]                   (remaining 32 hex chars, full entropy)
+func deriveKeyCredentials(key string) (email, password string) {
+	h := sha256.Sum256([]byte(key))
+	hexHash := hex.EncodeToString(h[:]) // 64 lowercase hex chars
+	email = hexHash[:32] + KeyLoginSyntheticEmailDomain
+	password = hexHash[32:]
+	return
+}
+
+// KeyRegister creates a new account identified by an access key.
+// adminSecret must match the stored key_register_secret setting; an empty stored value disables this endpoint.
+func (s *AuthService) KeyRegister(ctx context.Context, key, adminSecret string) (string, *User, error) {
+	if !accessKeyPattern.MatchString(key) {
+		return "", nil, infraerrors.BadRequest("INVALID_ACCESS_KEY", "access key must be 32–64 alphanumeric, underscore, or hyphen characters")
+	}
+	if s.settingService == nil {
+		return "", nil, ErrServiceUnavailable
+	}
+	storedSecret := s.settingService.GetKeyRegisterSecret(ctx)
+	if storedSecret == "" {
+		return "", nil, infraerrors.Forbidden("KEY_REGISTER_DISABLED", "key-based registration is not enabled")
+	}
+	// Use constant-time comparison to prevent timing attacks that could reveal
+	// the stored secret's length or content via response-time differences.
+	if subtle.ConstantTimeCompare([]byte(adminSecret), []byte(storedSecret)) != 1 {
+		return "", nil, infraerrors.Unauthorized("INVALID_ADMIN_SECRET", "invalid admin registration secret")
+	}
+
+	email, rawPassword := deriveKeyCredentials(key)
+
+	exists, err := s.userRepo.ExistsByEmail(ctx, email)
+	if err != nil {
+		return "", nil, ErrServiceUnavailable
+	}
+	if exists {
+		return "", nil, ErrAccountExists
+	}
+
+	hashedPassword, err := s.HashPassword(rawPassword)
+	if err != nil {
+		return "", nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	var defaultRPMLimit int
+	if s.settingService != nil {
+		defaultRPMLimit = s.settingService.GetDefaultUserRPMLimit(ctx)
+	}
+	grantPlan := s.resolveSignupGrantPlan(ctx, "email")
+
+	user := &User{
+		Email:        email,
+		Username:     key[:16], // first 16 chars of the raw key as display name
+		PasswordHash: hashedPassword,
+		Role:         RoleUser,
+		Balance:      grantPlan.Balance,
+		Concurrency:  grantPlan.Concurrency,
+		RPMLimit:     defaultRPMLimit,
+		Status:       StatusActive,
+	}
+
+	if err := s.userRepo.Create(ctx, user); err != nil {
+		if errors.Is(err, ErrEmailExists) {
+			return "", nil, ErrAccountExists
+		}
+		logger.LegacyPrintf("service.auth", "[Auth] Database error creating key-register user: %v", err)
+		return "", nil, ErrServiceUnavailable
+	}
+
+	s.postAuthUserBootstrap(ctx, user, "email", true)
+	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
+	_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
+	if s.affiliateService != nil {
+		if _, err := s.affiliateService.EnsureUserAffiliate(ctx, user.ID); err != nil {
+			logger.LegacyPrintf("service.auth", "[Auth] Failed to initialize affiliate for key-register user %d: %v", user.ID, err)
+		}
+	}
+
+	token, err := s.GenerateToken(ctx, user)
+	if err != nil {
+		return "", nil, fmt.Errorf("generate token: %w", err)
+	}
+	return token, user, nil
+}
+
+// KeyLogin authenticates a user by access key alone.
+func (s *AuthService) KeyLogin(ctx context.Context, key string) (string, *User, error) {
+	if !accessKeyPattern.MatchString(key) {
+		return "", nil, ErrInvalidCredentials
+	}
+	email, password := deriveKeyCredentials(key)
+	return s.Login(ctx, email, password)
 }

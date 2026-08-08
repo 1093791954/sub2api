@@ -20,6 +20,7 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool
 	FrontendURL                      string
 	InvitationCodeEnabled            bool
+	KeyRegisterSecret                string // 密钥注册验证码（空表示禁用）
 	TotpEnabled                      bool // TOTP 双因素认证
 	PasskeyEnabled                   bool // Passkey 登录
 	SessionBindingEnabled            bool // 会话 IP/UA 绑定（变更即失效）

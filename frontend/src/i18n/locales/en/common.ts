@@ -402,6 +402,13 @@ export default {
       state: 'State',
       fullUrl: 'Full URL'
     },
+    accountLogin: 'Account Login',
+    keyLogin: 'Key Login',
+    keyRegister: 'Key Register',
+    accessKey: 'Access Key',
+    accessKeyPlaceholder: 'Enter your 32–64 character access key',
+    adminSecret: 'Admin Registration Secret',
+    adminSecretPlaceholder: 'Enter the admin registration secret',
     // Forgot password
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset Your Password',

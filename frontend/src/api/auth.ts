@@ -678,6 +678,32 @@ export async function exchangePendingOAuthCompletion(
   return completePendingOAuthBindLogin(decision)
 }
 
+/**
+ * Key-based login (no password required)
+ * @param accessKey - The user's access key
+ * @returns Authentication response with token and user data
+ */
+export async function keyLogin(accessKey: string): Promise<AuthResponse> {
+  const { data } = await apiClient.post<AuthResponse>('/auth/key-login', {
+    access_key: accessKey,
+  })
+  return data
+}
+
+/**
+ * Key-based registration (requires admin secret)
+ * @param accessKey - The desired access key
+ * @param adminSecret - Admin registration secret
+ * @returns Authentication response with token and user data
+ */
+export async function keyRegister(accessKey: string, adminSecret: string): Promise<AuthResponse> {
+  const { data } = await apiClient.post<AuthResponse>('/auth/key-register', {
+    access_key: accessKey,
+    admin_secret: adminSecret,
+  })
+  return data
+}
+
 export const authAPI = {
   login,
   login2FA,
@@ -713,7 +739,9 @@ export const authAPI = {
   completeLinuxDoOAuthRegistration,
   completeOIDCOAuthRegistration,
   completeWeChatOAuthRegistration,
-  createPendingDingTalkOAuthAccount
+  createPendingDingTalkOAuthAccount,
+  keyLogin,
+  keyRegister
 }
 
 export default authAPI

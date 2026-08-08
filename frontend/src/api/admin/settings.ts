@@ -699,6 +699,7 @@ export interface UpdateSettingsRequest {
   password_reset_enabled?: boolean;
   frontend_url?: string;
   invitation_code_enabled?: boolean;
+  key_register_secret?: string; // 密钥注册验证码（空字符串=清除/禁用）
   totp_enabled?: boolean; // TOTP 双因素认证
   passkey_enabled?: boolean;
   session_binding_enabled?: boolean; // 会话 IP/UA 绑定

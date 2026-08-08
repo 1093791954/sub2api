@@ -240,6 +240,12 @@ func RegisterAuthRoutes(
 			}),
 			h.Auth.CreateDingTalkOAuthAccount,
 		)
+		auth.POST("/key-register", rateLimiter.LimitWithOptions("auth-key-register", 5, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.KeyRegister)
+		auth.POST("/key-login", rateLimiter.LimitWithOptions("auth-key-login", 20, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.KeyLogin)
 	}
 
 	// 公开设置（无需认证）：每次请求都会查询 DB，按客户端 IP 兜底限流，

@@ -27,7 +27,32 @@
       </div>
 
       <!-- Registration Form -->
-      <form v-else @submit.prevent="handleRegister" class="space-y-5">
+      <form v-else @submit.prevent="registerMode === 'key' ? handleKeyRegister() : handleRegister()" class="space-y-5">
+        <!-- Registration mode switcher -->
+        <div class="flex rounded-lg border border-gray-200 dark:border-dark-700 p-1 gap-1">
+          <button
+            type="button"
+            @click="registerMode = 'email'"
+            class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors"
+            :class="registerMode === 'email'
+              ? 'bg-white dark:bg-dark-800 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200'"
+          >
+            {{ t('auth.createAccount') }}
+          </button>
+          <button
+            type="button"
+            @click="registerMode = 'key'"
+            class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors"
+            :class="registerMode === 'key'
+              ? 'bg-white dark:bg-dark-800 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-dark-400 hover:text-gray-700 dark:hover:text-dark-200'"
+          >
+            {{ t('auth.keyRegister') }}
+          </button>
+        </div>
+
+        <template v-if="registerMode === 'email'">
         <!-- Local account identifier -->
         <div>
           <label for="email" class="input-label">
@@ -233,10 +258,49 @@
           @open="showAgreementModal = true"
         />
 
+        </template>
+        <template v-else>
+          <div>
+            <label for="register-access-key" class="input-label">{{ t('auth.accessKey') }}</label>
+            <div class="relative">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                <Icon name="key" size="md" class="text-gray-400 dark:text-dark-500" />
+              </div>
+              <input
+                id="register-access-key"
+                v-model="keyRegisterForm.accessKey"
+                type="text"
+                autocomplete="off"
+                :disabled="isLoading"
+                class="input pl-11"
+                :placeholder="t('auth.accessKeyPlaceholder')"
+              />
+            </div>
+          </div>
+          <div>
+            <label for="admin-secret" class="input-label">{{ t('auth.adminSecret') }}</label>
+            <div class="relative">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+                <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+              </div>
+              <input
+                id="admin-secret"
+                v-model="keyRegisterForm.adminSecret"
+                type="password"
+                autocomplete="off"
+                :disabled="isLoading"
+                class="input pl-11"
+                :placeholder="t('auth.adminSecretPlaceholder')"
+              />
+            </div>
+            <p v-if="keyRegisterError" class="mt-1 text-sm text-red-600 dark:text-red-400">{{ keyRegisterError }}</p>
+          </div>
+        </template>
+
         <!-- Submit Button -->
         <button
           type="submit"
-          :disabled="registrationActionDisabled || (turnstileEnabled && !turnstileToken)"
+          :disabled="registerMode === 'key' ? isLoading : (registrationActionDisabled || (turnstileEnabled && !turnstileToken))"
           class="btn btn-primary w-full"
         >
           <svg
@@ -271,7 +335,7 @@
 
       </form>
 
-      <div v-if="showOAuthLogin" class="space-y-3 pt-1">
+      <div v-if="registerMode === 'email' && showOAuthLogin" class="space-y-3 pt-1">
         <div class="flex items-center gap-3">
           <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
           <span class="text-xs text-gray-500 dark:text-dark-400">
@@ -381,6 +445,9 @@ const isLoading = ref<boolean>(false)
 const settingsLoaded = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
+const registerMode = ref<'email' | 'key'>('email')
+const keyRegisterForm = reactive({ accessKey: '', adminSecret: '' })
+const keyRegisterError = ref<string>('')
 
 // Public settings
 const registrationEnabled = ref<boolean>(true)
@@ -936,6 +1003,30 @@ function validateForm(): boolean {
 }
 
 // ==================== Form Handlers ====================
+
+async function handleKeyRegister(): Promise<void> {
+  if (!keyRegisterForm.accessKey.trim() || !keyRegisterForm.adminSecret.trim()) return
+  // Respect the same login-agreement gate as regular registration.
+  if (agreementGateActive.value) {
+    appStore.showWarning(t('legal.loginAgreementPrompt.loginRequiredWarning'))
+    if (loginAgreementMode.value !== 'checkbox') {
+      showAgreementModal.value = true
+    }
+    return
+  }
+  isLoading.value = true
+  keyRegisterError.value = ''
+  try {
+    await authStore.keyRegister(keyRegisterForm.accessKey.trim(), keyRegisterForm.adminSecret.trim())
+    appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
+    await router.push('/dashboard')
+  } catch (err: unknown) {
+    keyRegisterError.value = buildAuthErrorMessage(err, { fallback: t('auth.registrationFailed') })
+    appStore.showError(keyRegisterError.value)
+  } finally {
+    isLoading.value = false
+  }
+}
 
 async function handleRegister(): Promise<void> {
   // Clear previous error
