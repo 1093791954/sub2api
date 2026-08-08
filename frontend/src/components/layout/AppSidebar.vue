@@ -151,6 +151,7 @@
     <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
       <!-- Theme Toggle -->
       <button
+        v-if="isAgentBoxFooterControlVisible('themeToggle')"
         @click="toggleTheme"
         class="sidebar-link mb-2 w-full"
         :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
@@ -165,6 +166,7 @@
 
       <!-- Collapse Button -->
       <button
+        v-if="isAgentBoxFooterControlVisible('sidebarCollapse')"
         @click="toggleSidebar"
         class="sidebar-link w-full"
         :class="{ 'sidebar-link-collapsed': sidebarCollapsed }"
@@ -197,11 +199,17 @@ import { sanitizeSvg } from '@/utils/sanitize'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, makeSidebarFlag } from '@/utils/featureFlags'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
+import {
+  isAgentBoxFooterControlVisible,
+  isAgentBoxNavItemVisible,
+  type AgentBoxNavigationScope,
+} from '@/config/agentboxEmbed'
 
 interface NavItem {
   path: string
   label: string
   icon: unknown
+  agentBoxNavId?: string
   iconSvg?: string
   hideInSimpleMode?: boolean
   children?: NavItem[]
@@ -715,6 +723,7 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
       path: `/custom/${item.id}`,
       label: item.label,
       icon: null,
+      agentBoxNavId: 'custom',
       iconSvg: item.icon_svg,
     })),
   )
@@ -727,13 +736,22 @@ function finalizeNav(items: NavItem[]): NavItem[] {
   return authStore.isSimpleMode ? visible.filter(item => !item.hideInSimpleMode) : visible
 }
 
+function filterAgentBoxNav(items: NavItem[], scope: AgentBoxNavigationScope): NavItem[] {
+  return items.flatMap(item => {
+    const children = item.children ? filterAgentBoxNav(item.children, scope) : undefined
+    const itemId = item.agentBoxNavId ?? item.path
+    if (!isAgentBoxNavItemVisible(scope, itemId) && !(children && children.length > 0)) return []
+    return [{ ...item, children }]
+  })
+}
+
 // User navigation items (for regular users)
-const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
+const userNavItems = computed((): NavItem[] => filterAgentBoxNav(finalizeNav(buildSelfNavItems(true)), 'user'))
 
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
 // separate admin entry, since the page is purely a user-facing view.
-const personalNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(false)))
+const personalNavItems = computed((): NavItem[] => filterAgentBoxNav(finalizeNav(buildSelfNavItems(false)), 'admin'))
 
 // Custom menu items filtered by visibility
 const customMenuItemsForUser = computed(() => {
@@ -823,16 +841,16 @@ const adminNavItems = computed((): NavItem[] => {
     filtered.push({ path: '/keys', label: t('nav.apiKeys'), icon: KeyIcon })
     filtered.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
     for (const cm of customMenuItemsForAdmin.value) {
-      filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+      filtered.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, agentBoxNavId: 'custom', iconSvg: cm.icon_svg })
     }
-    return filtered
+    return filterAgentBoxNav(filtered, 'admin')
   }
 
   visible.push({ path: '/admin/settings', label: t('nav.settings'), icon: CogIcon })
   for (const cm of customMenuItemsForAdmin.value) {
-    visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, iconSvg: cm.icon_svg })
+    visible.push({ path: `/custom/${cm.id}`, label: cm.label, icon: null, agentBoxNavId: 'custom', iconSvg: cm.icon_svg })
   }
-  return visible
+  return filterAgentBoxNav(visible, 'admin')
 })
 
 function toggleSidebar() {
