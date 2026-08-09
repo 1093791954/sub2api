@@ -220,7 +220,7 @@
                 </button>
               </div>
 
-              <div class="border-t border-gray-100 py-1 dark:border-dark-700">
+              <div v-if="!isEmbeddedInAgentBox" class="border-t border-gray-100 py-1 dark:border-dark-700">
                 <button
                   @click="handleLogout"
                   class="dropdown-item w-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
@@ -261,6 +261,7 @@ import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { sanitizeUrl } from '@/utils/url'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
+import { getAgentBoxEmbedConfig } from '@/config/agentboxEmbed'
 
 const router = useRouter()
 const route = useRoute()
@@ -271,6 +272,7 @@ const adminSettingsStore = useAdminSettingsStore()
 const onboardingStore = useOnboardingStore()
 
 const user = computed(() => authStore.user)
+const isEmbeddedInAgentBox = computed(() => getAgentBoxEmbedConfig() !== null)
 const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
