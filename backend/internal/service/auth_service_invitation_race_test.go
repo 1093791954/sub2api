@@ -39,9 +39,19 @@ func (s *raceSafeUserRepo) ExistsByEmailAlias(ctx context.Context, email string)
 	return s.ExistsByEmail(ctx, email)
 }
 
+func (s *raceSafeUserRepo) Create(_ context.Context, user *User) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.createLocked(user)
+}
+
 func (s *raceSafeUserRepo) CreateWithEmailAliasGuard(_ context.Context, user *User) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.createLocked(user)
+}
+
+func (s *raceSafeUserRepo) createLocked(user *User) error {
 	if _, ok := s.byEmail[user.Email]; ok {
 		return ErrEmailExists
 	}
@@ -119,69 +129,86 @@ func (s *raceSafeRedeemRepo) Use(_ context.Context, id, userID int64) error {
 }
 
 // TestAuthService_Register_InvitationCodeSingleUseUnderConcurrency 回归测试：
-// 同一邀请码并发注册必须恰好成功 1 次，其余请求以 INVITATION_CODE_INVALID 拒绝。
+// 账号标识和邮箱标识两种模式下，同一邀请码并发注册都必须恰好成功 1 次，
+// 其余请求以 INVITATION_CODE_INVALID 拒绝。
 //
 // 修复前：邀请码“检查(CanUse) 与 标记已用(Use)”分离且不在同一事务，Use 失败被吞，
 // 并发请求全部注册成功（一个邀请码可创建任意数量账号）。此测试在该实现下必然失败。
 // 修复后：用户创建与邀请码占用在同一事务内原子完成（或退化路径下由 Use 条件更新
 // 兜底），并发下仅最先占码的注册成功。
 func TestAuthService_Register_InvitationCodeSingleUseUnderConcurrency(t *testing.T) {
-	const code = "INV-RACE-001"
-	userRepo := newRaceSafeUserRepo()
-	redeemRepo := &raceSafeRedeemRepo{codes: map[string]*RedeemCode{
-		code: {ID: 1, Code: code, Type: RedeemTypeInvitation, Status: StatusUnused},
-	}}
-	settings := map[string]string{
-		"registration_enabled":    "true",
-		"invitation_code_enabled": "true",
-	}
-	svc := newOAuthEmailFlowAuthService(
-		userRepo,
-		redeemRepo,
-		&refreshTokenCacheStub{},
-		settings,
-		nil, // emailCache：注册不要求邮箱验证，保持关闭
-		&userPlatformQuotaRepoStub{},
-	)
+	for _, tc := range []struct {
+		name        string
+		accountMode bool
+		code        string
+	}{
+		{name: "email mode", code: "INV-RACE-EMAIL-001"},
+		{name: "account mode", accountMode: true, code: "INV-RACE-ACCOUNT-001"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			userRepo := newRaceSafeUserRepo()
+			redeemRepo := &raceSafeRedeemRepo{codes: map[string]*RedeemCode{
+				tc.code: {ID: 1, Code: tc.code, Type: RedeemTypeInvitation, Status: StatusUnused},
+			}}
+			settings := map[string]string{
+				SettingKeyRegistrationEnabled:   "true",
+				SettingKeyInvitationCodeEnabled: "true",
+			}
+			if tc.accountMode {
+				settings[SettingKeyAccountLoginEnabled] = "true"
+			}
+			svc := newOAuthEmailFlowAuthService(
+				userRepo,
+				redeemRepo,
+				&refreshTokenCacheStub{},
+				settings,
+				nil, // emailCache：注册不要求邮箱验证，保持关闭
+				&userPlatformQuotaRepoStub{},
+			)
 
-	const n = 8
-	ctx := context.Background()
-	start := make(chan struct{})
-	results := make(chan error, n)
-	var wg sync.WaitGroup
-	for i := 0; i < n; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			<-start
-			email := fmt.Sprintf("race-%d@example.com", i)
-			_, _, err := svc.RegisterWithVerification(ctx, email, "Password123!", "", "", code, "")
-			results <- err
-		}(i)
-	}
-	close(start)
-	wg.Wait()
-	close(results)
+			const n = 8
+			ctx := context.Background()
+			start := make(chan struct{})
+			results := make(chan error, n)
+			var wg sync.WaitGroup
+			for i := 0; i < n; i++ {
+				wg.Add(1)
+				go func(i int) {
+					defer wg.Done()
+					<-start
+					identifier := fmt.Sprintf("race-%d@example.com", i)
+					if tc.accountMode {
+						identifier = fmt.Sprintf("race-account-%d", i)
+					}
+					_, _, err := svc.RegisterWithVerification(ctx, identifier, "Password123!", "", "", tc.code, "")
+					results <- err
+				}(i)
+			}
+			close(start)
+			wg.Wait()
+			close(results)
 
-	successes := 0
-	rejected := 0
-	for err := range results {
-		switch {
-		case err == nil:
-			successes++
-		case errors.Is(err, ErrInvitationCodeInvalid):
-			rejected++
-		default:
-			t.Fatalf("unexpected registration error: %v", err)
-		}
-	}
-	require.Equal(t, 1, successes, "同一邀请码并发注册必须恰好成功 1 次")
-	require.Equal(t, n-1, rejected, "其余并发请求必须以 INVITATION_CODE_INVALID 拒绝")
+			successes := 0
+			rejected := 0
+			for err := range results {
+				switch {
+				case err == nil:
+					successes++
+				case errors.Is(err, ErrInvitationCodeInvalid):
+					rejected++
+				default:
+					t.Fatalf("unexpected registration error: %v", err)
+				}
+			}
+			require.Equal(t, 1, successes, "同一邀请码并发注册必须恰好成功 1 次")
+			require.Equal(t, n-1, rejected, "其余并发请求必须以 INVITATION_CODE_INVALID 拒绝")
 
-	claimed, err := redeemRepo.GetByCode(ctx, code)
-	require.NoError(t, err)
-	require.Equal(t, StatusUsed, claimed.Status, "邀请码最终必须处于 used 状态")
-	require.NotNil(t, claimed.UsedBy, "used_by 必须记录实际注册用户")
+			claimed, err := redeemRepo.GetByCode(ctx, tc.code)
+			require.NoError(t, err)
+			require.Equal(t, StatusUsed, claimed.Status, "邀请码最终必须处于 used 状态")
+			require.NotNil(t, claimed.UsedBy, "used_by 必须记录实际注册用户")
+		})
+	}
 }
 
 // TestAuthService_Register_InvitationCodeRejectedWhenAlreadyUsed 顺序路径回归：

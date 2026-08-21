@@ -414,6 +414,19 @@ func TestAuthService_Register_AccountModeReportsDuplicateAccount(t *testing.T) {
 	require.ErrorIs(t, err, ErrAccountExists)
 }
 
+func TestAuthService_Register_AccountModeCreateRaceReportsAccountExists(t *testing.T) {
+	// 模拟前置查重通过后，另一个请求抢先写入账号唯一键。
+	repo := &userRepoStub{createErr: ErrEmailExists}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+		SettingKeyAccountLoginEnabled: "true",
+	}, nil, nil)
+
+	_, _, err := service.Register(context.Background(), "racing-account", "password")
+	require.ErrorIs(t, err, ErrAccountExists)
+	require.Equal(t, "ACCOUNT_EXISTS", infraerrors.FromError(err).Reason)
+}
+
 func TestAuthService_Register_AliasDuplicateRejected(t *testing.T) {
 	repo := &userRepoStub{aliasExists: true}
 	service := newAuthService(repo, map[string]string{
@@ -543,6 +556,52 @@ func TestAuthService_Register_Success(t *testing.T) {
 	require.Equal(t, 2, user.Concurrency)
 	require.Len(t, repo.created, 1)
 	require.True(t, user.CheckPassword("password"))
+}
+
+func TestAuthService_KeyRegisterAndLogin_WorkWhenNormalRegistrationDisabled(t *testing.T) {
+	repo := &userRepoStub{nextID: 105}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "false",
+		SettingKeyKeyRegisterSecret:   "registration-secret",
+	}, nil, nil)
+	const accessKey = "abcdefghijklmnopqrstuvwxyz123456"
+
+	registerToken, registered, err := service.KeyRegister(
+		context.Background(),
+		accessKey,
+		"registration-secret",
+	)
+	require.NoError(t, err)
+	require.NotEmpty(t, registerToken)
+	require.NotNil(t, registered)
+	require.Equal(t, int64(105), registered.ID)
+	require.Equal(t, accessKey[:16], registered.Username)
+	require.Len(t, repo.created, 1)
+
+	loginToken, loggedIn, err := service.KeyLogin(context.Background(), accessKey)
+	require.NoError(t, err)
+	require.NotEmpty(t, loginToken)
+	require.Same(t, registered, loggedIn)
+
+	_, _, err = service.KeyLogin(context.Background(), "zyxwvutsrqponmlkjihgfedcba654321")
+	require.ErrorIs(t, err, ErrInvalidCredentials)
+}
+
+func TestAuthService_KeyRegister_RejectsInvalidAdminSecret(t *testing.T) {
+	repo := &userRepoStub{nextID: 106}
+	service := newAuthService(repo, map[string]string{
+		SettingKeyRegistrationEnabled: "false",
+		SettingKeyKeyRegisterSecret:   "registration-secret",
+	}, nil, nil)
+
+	_, _, err := service.KeyRegister(
+		context.Background(),
+		"abcdefghijklmnopqrstuvwxyz123456",
+		"wrong-secret",
+	)
+	require.Error(t, err)
+	require.Equal(t, "INVALID_ADMIN_SECRET", infraerrors.FromError(err).Reason)
+	require.Empty(t, repo.created)
 }
 
 func TestAuthService_ValidateToken_ExpiredReturnsClaimsWithError(t *testing.T) {

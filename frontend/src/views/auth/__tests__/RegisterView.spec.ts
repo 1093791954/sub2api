@@ -2,8 +2,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import RegisterView from '@/views/auth/RegisterView.vue'
 
-const { getPublicSettingsMock } = vi.hoisted(() => ({
-  getPublicSettingsMock: vi.fn()
+const { getPublicSettingsMock, keyRegisterMock, registerMock, routerPushMock } = vi.hoisted(() => ({
+  getPublicSettingsMock: vi.fn(),
+  keyRegisterMock: vi.fn(),
+  registerMock: vi.fn(),
+  routerPushMock: vi.fn()
 }))
 
 const publicSettings = {
@@ -24,7 +27,7 @@ const publicSettings = {
 }
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push: routerPushMock }),
   useRoute: () => ({ query: {} })
 }))
 
@@ -41,7 +44,7 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('@/stores', () => ({
-  useAuthStore: () => ({ register: vi.fn() }),
+  useAuthStore: () => ({ register: registerMock, keyRegister: keyRegisterMock }),
   useAppStore: () => ({
     showError: vi.fn(),
     showSuccess: vi.fn(),
@@ -79,6 +82,10 @@ function mountRegister() {
 describe('RegisterView invitation layout', () => {
   beforeEach(() => {
     getPublicSettingsMock.mockReset()
+    keyRegisterMock.mockReset()
+    keyRegisterMock.mockResolvedValue({ id: 1 })
+    registerMock.mockReset()
+    routerPushMock.mockReset()
     getPublicSettingsMock.mockResolvedValue(publicSettings)
   })
 
@@ -108,5 +115,51 @@ describe('RegisterView invitation layout', () => {
 
     expect(wrapper.find('[data-testid="affiliate-invitation-field"]').exists()).toBe(false)
     expect(wrapper.get('#invitation_code').exists()).toBe(true)
+  })
+
+  it('renders the custom account identifier in account mode', async () => {
+    getPublicSettingsMock.mockResolvedValueOnce({
+      ...publicSettings,
+      account_login_enabled: true
+    })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(wrapper.get('label[for="email"]').text()).toContain('auth.accountLabel')
+    expect(wrapper.get('#email').attributes('type')).toBe('text')
+    expect(wrapper.get('#email').attributes('autocomplete')).toBe('username')
+  })
+
+  it('keeps key registration available when normal registration is disabled', async () => {
+    getPublicSettingsMock.mockResolvedValueOnce({
+      ...publicSettings,
+      registration_enabled: false
+    })
+
+    const wrapper = mountRegister()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="registration-disabled"]').text()).toContain(
+      'auth.registrationDisabled'
+    )
+    expect(wrapper.find('#email').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="registration-submit"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="registration-mode-key"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="registration-disabled"]').exists()).toBe(false)
+    await wrapper.get('#register-access-key').setValue('abcdefghijklmnopqrstuvwxyz123456')
+    await wrapper.get('#admin-secret').setValue('registration-secret')
+    expect(wrapper.get('[data-testid="registration-submit"]').text()).toContain('auth.keyRegister')
+
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(keyRegisterMock).toHaveBeenCalledWith(
+      'abcdefghijklmnopqrstuvwxyz123456',
+      'registration-secret'
+    )
+    expect(routerPushMock).toHaveBeenCalledWith('/dashboard')
   })
 })

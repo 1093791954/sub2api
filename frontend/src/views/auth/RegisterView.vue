@@ -11,27 +11,13 @@
         </p>
       </div>
 
-      <!-- Registration Disabled Message -->
-      <div
-        v-if="!registrationEnabled && settingsLoaded"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
-      >
-        <div class="flex items-start gap-3">
-          <div class="flex-shrink-0">
-            <Icon name="exclamationCircle" size="md" class="text-amber-500" />
-          </div>
-          <p class="text-sm text-amber-700 dark:text-amber-400">
-            {{ t('auth.registrationDisabled') }}
-          </p>
-        </div>
-      </div>
-
       <!-- Registration Form -->
-      <form v-else @submit.prevent="registerMode === 'key' ? handleKeyRegister() : handleRegister()" class="space-y-5">
+      <form @submit.prevent="registerMode === 'key' ? handleKeyRegister() : handleRegister()" class="space-y-5">
         <!-- Registration mode switcher -->
         <div class="flex rounded-lg border border-gray-200 dark:border-dark-700 p-1 gap-1">
           <button
             type="button"
+            data-testid="registration-mode-email"
             @click="registerMode = 'email'"
             class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors"
             :class="registerMode === 'email'
@@ -42,6 +28,7 @@
           </button>
           <button
             type="button"
+            data-testid="registration-mode-key"
             @click="registerMode = 'key'"
             class="flex-1 rounded-md py-1.5 text-sm font-medium transition-colors"
             :class="registerMode === 'key'
@@ -52,7 +39,23 @@
           </button>
         </div>
 
-        <template v-if="registerMode === 'email'">
+        <!-- Normal registration can be disabled independently from key registration. -->
+        <div
+          v-if="registerMode === 'email' && !registrationEnabled && settingsLoaded"
+          data-testid="registration-disabled"
+          class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+        >
+          <div class="flex items-start gap-3">
+            <div class="flex-shrink-0">
+              <Icon name="exclamationCircle" size="md" class="text-amber-500" />
+            </div>
+            <p class="text-sm text-amber-700 dark:text-amber-400">
+              {{ t('auth.registrationDisabled') }}
+            </p>
+          </div>
+        </div>
+
+        <template v-if="registerMode === 'email' && registrationEnabled">
         <!-- Local account identifier -->
         <div>
           <label for="email" class="input-label">
@@ -260,7 +263,7 @@
         />
 
         </template>
-        <template v-else>
+        <template v-else-if="registerMode === 'key'">
           <div>
             <label for="register-access-key" class="input-label">{{ t('auth.accessKey') }}</label>
             <div class="relative">
@@ -300,7 +303,9 @@
 
         <!-- Submit Button -->
         <button
+          v-if="registerMode === 'key' || registrationEnabled"
           type="submit"
+          data-testid="registration-submit"
           :disabled="registerMode === 'key' ? isLoading : (registrationActionDisabled || (turnstileEnabled && !turnstileToken))"
           class="btn btn-primary w-full"
         >
@@ -328,7 +333,9 @@
           {{
             isLoading
               ? t('auth.processing')
-              : emailVerifyEnabled
+              : registerMode === 'key'
+                ? t('auth.keyRegister')
+                : emailVerifyEnabled
                 ? t('auth.continue')
                 : t('auth.createAccount')
           }}
@@ -336,7 +343,7 @@
 
       </form>
 
-      <div v-if="registerMode === 'email' && showOAuthLogin" class="space-y-3 pt-1">
+      <div v-if="registerMode === 'email' && registrationEnabled && showOAuthLogin" class="space-y-3 pt-1">
         <div class="flex items-center gap-3">
           <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
           <span class="text-xs text-gray-500 dark:text-dark-400">
@@ -561,7 +568,11 @@ const agreementGateActive = computed(
 )
 
 const registrationActionDisabled = computed(
-  () => isLoading.value || !settingsLoaded.value || agreementGateActive.value
+  () =>
+    isLoading.value ||
+    !settingsLoaded.value ||
+    !registrationEnabled.value ||
+    agreementGateActive.value
 )
 
 watch(validationToastMessage, (value, previousValue) => {

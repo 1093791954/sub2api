@@ -13,8 +13,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestCreateWithEmailAliasGuardJoinsOuterTransaction 验证用户创建会加入调用方开启的
-// 外部 ent 事务（注册流程“建用户 + 占用邀请码”原子性的基础）：
+// TestUserCreateJoinsOuterTransaction 验证邮箱别名保护和自定义账号两条用户创建路径
+// 都会加入调用方开启的外部 ent 事务（注册流程“建用户 + 占用邀请码”原子性的基础）：
 //   - 外层事务回滚后，用户与邀请码占用必须一并撤销（不得残留孤儿账号）；
 //   - 外层事务提交后，用户与邀请码占用同时生效。
 //
@@ -22,7 +22,7 @@ import (
 // Client.Tx 不感知上下文事务（只检查 driver 类型），ErrTxStarted 分支实际是死代码，
 // 导致外层事务包不住用户写入；并发注册同一邀请码时，败者用户的写入已自行提交，
 // 即使注册被拒绝也会留下可登录的孤儿账号（1 个邀请码仍可生成任意数量账号）。
-func TestCreateWithEmailAliasGuardJoinsOuterTransaction(t *testing.T) {
+func TestUserCreateJoinsOuterTransaction(t *testing.T) {
 	client := testEntClient(t)
 	userRepo := NewUserRepository(client, integrationDB)
 	redeemRepo := NewRedeemCodeRepository(client)
@@ -77,6 +77,35 @@ func TestCreateWithEmailAliasGuardJoinsOuterTransaction(t *testing.T) {
 		exists, err := userRepo.ExistsByEmail(ctx, "itx-rollback@example.com")
 		require.NoError(t, err)
 		require.False(t, exists, "回滚后不得残留孤儿用户")
+
+		after, err := client.RedeemCode.Get(ctx, codeID)
+		require.NoError(t, err)
+		require.Equal(t, service.StatusUnused, after.Status, "回滚后邀请码应保持 unused")
+	})
+
+	t.Run("account mode rollback removes user and releases claim", func(t *testing.T) {
+		codeID := seedCode("ITX-RACE-ACCOUNT-ROLLBACK-001")
+		tx, err := client.Tx(ctx)
+		require.NoError(t, err)
+		txCtx := dbent.NewTxContext(ctx, tx)
+
+		u := &service.User{
+			Email:        "itx-account-rollback",
+			Username:     "itx-account-rollback",
+			PasswordHash: "test-password-hash",
+			Role:         service.RoleUser,
+			Status:       service.StatusActive,
+			Balance:      0,
+			Concurrency:  1,
+		}
+		require.NoError(t, userRepo.Create(txCtx, u))
+		require.Greater(t, u.ID, int64(0), "create 应回填用户 ID")
+		require.NoError(t, redeemRepo.Use(txCtx, codeID, u.ID))
+		require.NoError(t, tx.Rollback())
+
+		exists, err := userRepo.ExistsByEmail(ctx, u.Email)
+		require.NoError(t, err)
+		require.False(t, exists, "账号模式回滚后不得残留孤儿用户")
 
 		after, err := client.RedeemCode.Get(ctx, codeID)
 		require.NoError(t, err)
