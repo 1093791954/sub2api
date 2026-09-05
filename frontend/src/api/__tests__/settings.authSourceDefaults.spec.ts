@@ -55,7 +55,7 @@ describe("admin settings auth source defaults helpers", () => {
     });
     expect(state.oidc).toEqual({
       balance: 0,
-      concurrency: 5,
+      concurrency: 0,
       subscriptions: [],
       grant_on_signup: false,
       grant_on_first_bind: false,
@@ -63,7 +63,7 @@ describe("admin settings auth source defaults helpers", () => {
     });
     expect(state.wechat).toEqual({
       balance: 0,
-      concurrency: 5,
+      concurrency: 0,
       subscriptions: [],
       grant_on_signup: false,
       grant_on_first_bind: false,
@@ -75,9 +75,22 @@ describe("admin settings auth source defaults helpers", () => {
     const state = buildAuthSourceDefaultsState({});
 
     expect(state.email.grant_on_signup).toBe(false);
+    expect(state.email.concurrency).toBe(0);
     expect(state.linuxdo.grant_on_signup).toBe(false);
     expect(state.oidc.grant_on_signup).toBe(false);
     expect(state.wechat.grant_on_signup).toBe(false);
+  });
+
+  it("preserves unlimited auth source concurrency", () => {
+    const state = buildAuthSourceDefaultsState({
+      auth_source_default_email_concurrency: 0,
+    });
+    const payload: UpdateSettingsRequest = {};
+
+    appendAuthSourceDefaultsToUpdateRequest(payload, state);
+
+    expect(state.email.concurrency).toBe(0);
+    expect(payload.auth_source_default_email_concurrency).toBe(0);
   });
 
   it("reads nested platform_quotas from settings into auth source state", () => {

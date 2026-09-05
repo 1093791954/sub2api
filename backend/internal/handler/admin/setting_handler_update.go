@@ -539,8 +539,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	}
 
 	// 验证参数
-	if req.DefaultConcurrency < 1 {
-		req.DefaultConcurrency = 1
+	if req.DefaultConcurrency < 0 {
+		req.DefaultConcurrency = 0
 	}
 	if req.DefaultBalance < 0 {
 		req.DefaultBalance = 0

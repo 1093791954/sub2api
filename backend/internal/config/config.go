@@ -2149,7 +2149,8 @@ func setDefaults() {
 	// Do not ship fixed defaults here to avoid insecure "known credentials" in production.
 	viper.SetDefault("default.admin_email", "")
 	viper.SetDefault("default.admin_password", "")
-	viper.SetDefault("default.user_concurrency", 5)
+	// 0 means unlimited user concurrency.
+	viper.SetDefault("default.user_concurrency", 0)
 	viper.SetDefault("default.user_balance", 0)
 	viper.SetDefault("default.api_key_prefix", "sk-")
 	viper.SetDefault("default.rate_multiplier", 1.0)

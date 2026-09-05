@@ -111,7 +111,7 @@ const AUTH_SOURCE_TYPES: AuthSourceType[] = [
   "dingtalk",
 ];
 const AUTH_SOURCE_DEFAULT_BALANCE = 0;
-const AUTH_SOURCE_DEFAULT_CONCURRENCY = 5;
+const AUTH_SOURCE_DEFAULT_CONCURRENCY = 0;
 const PAYMENT_VISIBLE_METHOD_SOURCE_OPTIONS: Record<
   PaymentVisibleMethod,
   PaymentVisibleMethodSourceOption[]
@@ -221,7 +221,7 @@ export function buildAuthSourceDefaultsState(
           AUTH_SOURCE_DEFAULT_BALANCE,
       ),
       concurrency: Math.max(
-        1,
+        0,
         Number(
           raw[`auth_source_default_${source}_concurrency`] ??
             AUTH_SOURCE_DEFAULT_CONCURRENCY,
@@ -253,7 +253,7 @@ export function appendAuthSourceDefaultsToUpdateRequest(
     target[`auth_source_default_${source}_balance`] =
       Number(current.balance) || 0;
     target[`auth_source_default_${source}_concurrency`] = Math.max(
-      1,
+      0,
       Math.floor(
         Number(current.concurrency) || AUTH_SOURCE_DEFAULT_CONCURRENCY,
       ),

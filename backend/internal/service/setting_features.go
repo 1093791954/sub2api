@@ -314,7 +314,7 @@ func (s *SettingService) GetDefaultConcurrency(ctx context.Context) int {
 	if err != nil {
 		return s.cfg.Default.UserConcurrency
 	}
-	if v, err := strconv.Atoi(value); err == nil && v > 0 {
+	if v, err := strconv.Atoi(value); err == nil && v >= 0 {
 		return v
 	}
 	return s.cfg.Default.UserConcurrency

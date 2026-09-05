@@ -131,37 +131,37 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultUserRPMLimit:                       "0",
 		SettingKeyDefaultSubscriptions:                      "[]",
 		SettingKeyAuthSourceDefaultEmailBalance:             "0",
-		SettingKeyAuthSourceDefaultEmailConcurrency:         "5",
+		SettingKeyAuthSourceDefaultEmailConcurrency:         "0",
 		SettingKeyAuthSourceDefaultEmailSubscriptions:       "[]",
 		SettingKeyAuthSourceDefaultEmailGrantOnSignup:       "false",
 		SettingKeyAuthSourceDefaultEmailGrantOnFirstBind:    "false",
 		SettingKeyAuthSourceDefaultLinuxDoBalance:           "0",
-		SettingKeyAuthSourceDefaultLinuxDoConcurrency:       "5",
+		SettingKeyAuthSourceDefaultLinuxDoConcurrency:       "0",
 		SettingKeyAuthSourceDefaultLinuxDoSubscriptions:     "[]",
 		SettingKeyAuthSourceDefaultLinuxDoGrantOnSignup:     "false",
 		SettingKeyAuthSourceDefaultLinuxDoGrantOnFirstBind:  "false",
 		SettingKeyAuthSourceDefaultOIDCBalance:              "0",
-		SettingKeyAuthSourceDefaultOIDCConcurrency:          "5",
+		SettingKeyAuthSourceDefaultOIDCConcurrency:          "0",
 		SettingKeyAuthSourceDefaultOIDCSubscriptions:        "[]",
 		SettingKeyAuthSourceDefaultOIDCGrantOnSignup:        "false",
 		SettingKeyAuthSourceDefaultOIDCGrantOnFirstBind:     "false",
 		SettingKeyAuthSourceDefaultWeChatBalance:            "0",
-		SettingKeyAuthSourceDefaultWeChatConcurrency:        "5",
+		SettingKeyAuthSourceDefaultWeChatConcurrency:        "0",
 		SettingKeyAuthSourceDefaultWeChatSubscriptions:      "[]",
 		SettingKeyAuthSourceDefaultWeChatGrantOnSignup:      "false",
 		SettingKeyAuthSourceDefaultWeChatGrantOnFirstBind:   "false",
 		SettingKeyAuthSourceDefaultGitHubBalance:            "0",
-		SettingKeyAuthSourceDefaultGitHubConcurrency:        "5",
+		SettingKeyAuthSourceDefaultGitHubConcurrency:        "0",
 		SettingKeyAuthSourceDefaultGitHubSubscriptions:      "[]",
 		SettingKeyAuthSourceDefaultGitHubGrantOnSignup:      "false",
 		SettingKeyAuthSourceDefaultGitHubGrantOnFirstBind:   "false",
 		SettingKeyAuthSourceDefaultGoogleBalance:            "0",
-		SettingKeyAuthSourceDefaultGoogleConcurrency:        "5",
+		SettingKeyAuthSourceDefaultGoogleConcurrency:        "0",
 		SettingKeyAuthSourceDefaultGoogleSubscriptions:      "[]",
 		SettingKeyAuthSourceDefaultGoogleGrantOnSignup:      "false",
 		SettingKeyAuthSourceDefaultGoogleGrantOnFirstBind:   "false",
 		SettingKeyAuthSourceDefaultDingTalkBalance:          "0",
-		SettingKeyAuthSourceDefaultDingTalkConcurrency:      "5",
+		SettingKeyAuthSourceDefaultDingTalkConcurrency:      "0",
 		SettingKeyAuthSourceDefaultDingTalkSubscriptions:    "[]",
 		SettingKeyAuthSourceDefaultDingTalkGrantOnSignup:    "false",
 		SettingKeyAuthSourceDefaultDingTalkGrantOnFirstBind: "false",
@@ -1211,12 +1211,11 @@ func mergeProviderDefaultGrantSettings(globalDefaults ProviderDefaultGrantSettin
 
 	// 注意：不能把 parse 默认值 (defaultAuthSourceBalance / defaultAuthSourceConcurrency)
 	// 当作"未配置"哨兵——admin 完全有权显式设成相同的值，那时仍应覆盖 globalDefaults。
-	// 旧实现的 `!= defaultAuthSourceConcurrency` 会把 admin 设的 5 与 fallback 5 混淆，
-	// 导致渠道发放退回到全局默认（如 1），表现为"管理员设 5、新用户实际拿 1"。
+	// 渠道并发是显式覆盖；0 是有效值，表示不限制。
 	if providerDefaults.Balance >= 0 {
 		result.Balance = providerDefaults.Balance
 	}
-	if providerDefaults.Concurrency > 0 {
+	if providerDefaults.Concurrency >= 0 {
 		result.Concurrency = providerDefaults.Concurrency
 	}
 	if len(providerDefaults.Subscriptions) > 0 {

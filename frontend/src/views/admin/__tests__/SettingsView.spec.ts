@@ -369,7 +369,7 @@ const baseSettingsResponse = {
   passkey_rp_id: "sub3.nebula-spaces.com",
   passkey_rp_origins: ["https://sub3.nebula-spaces.com"],
   default_balance: 0,
-  default_concurrency: 1,
+  default_concurrency: 0,
   default_subscriptions: [],
   site_name: "Sub2API",
   site_logo: "",
